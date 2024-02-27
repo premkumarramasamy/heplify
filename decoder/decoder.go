@@ -24,6 +24,7 @@ import (
 )
 
 var PacketQueue = make(chan *Packet, 20000)
+var LocalAddr string = GetLocalIP()
 
 type Decoder struct {
 	asm           *tcpassembly.Assembler
@@ -514,6 +515,22 @@ func (d *Decoder) processTransport(foundLayerTypes *[]gopacket.LayerType, udp *l
 	}
 }
 
+func GetLocalIP() string {
+    addrs, err := net.InterfaceAddrs()
+    if err != nil {
+        return ""
+    }
+    for _, address := range addrs {
+        // check the address type and if it is not a loopback the display it
+        if ipnet, ok := address.(*net.IPNet); ok && !ipnet.IP.IsLoopback() {
+            if ipnet.IP.To4() != nil {
+                return ipnet.IP.String()
+            }
+        }
+    }
+    return ""
+}
+
 func callFSEPIfNeeded(payload []byte, dstIP net.IP, dstPort uint16) {
 	var callID []byte 
 	var err error
@@ -527,14 +544,7 @@ func callFSEPIfNeeded(payload []byte, dstIP net.IP, dstPort uint16) {
 		logp.Debug("ERROR", "Unable to retrieve Call-ID. Actual headers=%q", headers)
 	}
 
-	logp.Debug("CALLING CALLID", "ID: %s", string(callID))
-
-	logp.Debug("CALLING FSEP DETAILS","IP: %s, PORT: %v", dstIP.String() == "PRIVATE_IP", dstPort == 5080)
-
-	if dstIP.String() == "PRIVATE_IP" && dstPort == 5080 && strings.Contains(string(payload), "486 Busy here") {
-		logp.Info("INSIDE CALLING FSEP")
-		logp.Info("Performing Http Get to FSEP...")
-
+	if dstIP.String() == LocalAddr && dstPort == 5080 && strings.Contains(string(payload), "486 Busy here") {
 		jsonPayload := HangupRequest {
 			Cause: "USER_BUSY",
 		}
