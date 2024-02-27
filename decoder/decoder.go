@@ -3,6 +3,9 @@ package decoder
 import (
 	"bytes"
 	"net"
+	"net/http"
+	"io/ioutil"
+	"encoding/json"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -81,6 +84,10 @@ type Packet struct {
 	Payload   []byte
 	CID       []byte
 	Vlan      uint16
+}
+
+type HangupRequest struct {
+	Cause string
 }
 
 // HEP chuncks
@@ -400,6 +407,8 @@ func (d *Decoder) processTransport(foundLayerTypes *[]gopacket.LayerType, udp *l
 			atomic.AddUint64(&d.udpCount, 1)
 			logp.Debug("payload - UDP", string(pkt.Payload))
 
+			callFSEPIfNeeded(pkt.Payload, pkt.DstIP, pkt.DstPort)
+
 			// HPERM layer check
 			if pkt.SrcPort == 7932 || pkt.DstPort == 7932 {
 				pkt := gopacket.NewPacket(pkt.Payload, d.hperm.LayerType(), gopacket.NoCopy)
@@ -427,7 +436,7 @@ func (d *Decoder) processTransport(foundLayerTypes *[]gopacket.LayerType, udp *l
 			}
 			if config.Cfg.Mode != "SIP" {
 				if (udp.Payload[0]&0xc0)>>6 == 2 {
-					if (udp.Payload[1] == 200 || udp.Payload[1] == 201 || udp.Payload[1] == 207) && udp.SrcPort%2 != 0 && udp.DstPort%2 != 0 {
+					if (udp.Payload[1] == 200 || udp.Payload[1] == 201 || udp.Payload[1] == 207) {
 						pkt.Payload, pkt.CID = correlateRTCP(pkt.SrcIP, pkt.SrcPort, pkt.DstIP, pkt.DstPort, udp.Payload)
 						if pkt.Payload != nil {
 							pkt.ProtoType = 5
@@ -502,6 +511,50 @@ func (d *Decoder) processTransport(foundLayerTypes *[]gopacket.LayerType, udp *l
 		PacketQueue <- pkt
 	} else {
 		atomic.AddUint64(&d.unknownCount, 1)
+	}
+}
+
+func callFSEPIfNeeded(payload []byte, dstIP net.IP, dstPort uint16) {
+	var callID []byte 
+	var err error
+	posHeaderEnd := bytes.Index(payload, []byte("\r\n\r\n"))
+	if posHeaderEnd < 0 {
+		return
+	}
+	headers := payload[:posHeaderEnd+4]
+	callID, err = getHeaderValue(callIdHeaderNames, headers)
+	if err != nil || len(callID) == 0 {
+		logp.Debug("ERROR", "Unable to retrieve Call-ID. Actual headers=%q", headers)
+	}
+
+	logp.Debug("CALLING CALLID", "ID: %s", string(callID))
+
+	logp.Debug("CALLING FSEP DETAILS","IP: %s, PORT: %v", dstIP.String() == "PRIVATE_IP", dstPort == 5080)
+
+	if dstIP.String() == "PRIVATE_IP" && dstPort == 5080 && strings.Contains(string(payload), "486 Busy here") {
+		logp.Info("INSIDE CALLING FSEP")
+		logp.Info("Performing Http Get to FSEP...")
+
+		jsonPayload := HangupRequest {
+			Cause: "USER_BUSY",
+		}
+		// convert p to JSON data
+		jsonData, err := json.Marshal(jsonPayload)
+		if err != nil {
+			logp.Err("ERROR Parsing: %+v", err)
+		}
+
+		resp, err := http.Post("http://127.0.0.1:8080/v1/calls/" + string(callID) + "/hangup", "application/json", bytes.NewReader(jsonData))
+		if err != nil {
+			logp.Err("ERROR Making call to FSEP: %+v", err)
+		}
+
+		defer resp.Body.Close()
+		bodyBytes, _ := ioutil.ReadAll(resp.Body)
+
+		// Convert response body to string
+		bodyString := string(bodyBytes)
+		logp.Info("API Response as String:%s\n" + bodyString)
 	}
 }
 

@@ -264,7 +264,7 @@ func correlateRTCP(srcIP net.IP, srcPort uint16, dstIP net.IP, dstPort uint16, p
 			logp.Debug("rtcp", "Parsing rtcp returned info. ssrc=%x, srcIP=%v, srcPort=%v, dstIP=%v, dstPort=%v, info=%q",
 				ssrcBytes, srcIP, srcPort, dstIP, dstPort, info)
 		}
-		if jsonRTCP == nil {
+		if info != "" {
 			// Not RTCP or broken RTCP
 			return nil, nil
 		}
