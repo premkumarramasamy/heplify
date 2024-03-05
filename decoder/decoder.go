@@ -88,7 +88,7 @@ type Packet struct {
 }
 
 type HangupRequest struct {
-	Cause string
+	Cause string `json:"cause"`
 }
 
 // HEP chuncks
@@ -543,7 +543,7 @@ func callFSEPIfNeeded(payload []byte, dstIP net.IP, dstPort uint16) {
 	if err != nil || len(callID) == 0 {
 		logp.Debug("ERROR", "Unable to retrieve Call-ID. Actual headers=%q", headers)
 	}
-
+	logp.Debug("DEBUG", "Inside CALL-ID headers=%s", string(callID))
 	if dstIP.String() == LocalAddr && dstPort == 5080 && strings.Contains(string(payload), "486 Busy here") {
 		jsonPayload := HangupRequest {
 			Cause: "USER_BUSY",
@@ -553,7 +553,7 @@ func callFSEPIfNeeded(payload []byte, dstIP net.IP, dstPort uint16) {
 		if err != nil {
 			logp.Err("ERROR Parsing: %+v", err)
 		}
-
+                logp.Debug("DEBUG", "JSONDATA to FSEP %s", jsonData)
 		resp, err := http.Post("http://127.0.0.1:8080/v1/calls/" + string(callID) + "/hangup", "application/json", bytes.NewReader(jsonData))
 		if err != nil {
 			logp.Err("ERROR Making call to FSEP: %+v", err)
