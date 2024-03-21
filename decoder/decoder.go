@@ -544,7 +544,7 @@ func callFSEPIfNeeded(payload []byte, dstIP net.IP, dstPort uint16) {
 		logp.Debug("ERROR", "Unable to retrieve Call-ID. Actual headers=%q", headers)
 	}
 	logp.Debug("DEBUG", "Inside CALL-ID headers=%s", string(callID))
-	if dstIP.String() == LocalAddr && dstPort == 5080 && strings.Contains(string(payload), "486") {
+	if dstIP.String() == LocalAddr && dstPort == 5080 && strings.Contains(string(payload), "SIP/2.0 486") {
 		jsonPayload := HangupRequest {
 			Cause: "USER_BUSY",
 		}
