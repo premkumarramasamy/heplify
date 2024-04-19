@@ -554,7 +554,7 @@ func callFSEPIfNeeded(payload []byte, dstIP net.IP, dstPort uint16) {
 			logp.Err("ERROR Parsing: %+v", err)
 		}
                 logp.Debug("DEBUG", "JSONDATA to FSEP %s", jsonData)
-		resp, err := http.Post("http://127.0.0.1:8080/v1/calls/" + string(callID) + "/hangup", "application/json", bytes.NewReader(jsonData))
+		resp, err := http.Post("http://127.0.0.1:8080/v1/calls/" + strings.Split(string(callID), "@")[0] + "/hangup", "application/json", bytes.NewReader(jsonData))
 		if err != nil {
 			logp.Err("ERROR Making call to FSEP: %+v", err)
 		}
